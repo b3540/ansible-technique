@@ -1,14 +1,13 @@
 # オランダ的
-# インフラ
-# コントロール
-# テクニック
+### (中略)
+# 総集編
 # (ansible)
 
 ---
 
 ## 自己紹介
-## 中村 勲
 
+- 名前:中村 勲 (github:n10o)
 - 前職:IaaSの設計・開発
 - 現在:インフラ全般
 - Python, Java, JS(node.js,angular.js), C#(Unity)
@@ -30,8 +29,7 @@
 サイドから崩す手法
 - 参考:アルゼンチン的 -> 中央から崩す手法
 
-<!-- .slide: data-background="https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg" -->
-
+<img src="image/soccer.jpg" style="width: 700px; height: 400px;"/>
 
 ---
 
@@ -45,22 +43,15 @@
 
 ## 発表の流れ
 
-1. (前半戦)２つの簡単なインフラ改善ケースから、
-日々のストレスを高速に解消していく方法を考える
-最近は開発者もインフラを何らかの形で触る機会が多いので、
+1. (前半戦)２つのインフラ改善シナリオから、日々のストレスを解消する方法を考える
 
-2. (後半戦)改善テクニック、改善例
-
----
-
-## 利用ツールについて
-
-- chefでもcapistranoでもfabricでも、psshでも、シェルスクリプトでも使い慣れたものでも、実現できれば良い
-- 使い慣れたものがなければansibleで
+2. (後半戦)社内ツール紹介
 
 ---
 
 # 前半戦
+
+<!-- .slide: data-background="#66CCFF" -->
 
 ---
 
@@ -71,13 +62,12 @@
 - コマンド忘れた
 - 社員が増えた
 - サーバが重くなった
-- 下手にいじると壊れそう
+- 下手にいじると壊れそう、怖い
 - サーバ3台ぐらいから手でやるのはしんどい
 
 ---
 
-## 本日の改善対象タスク
-### 心得:時間をかけずに
+## 2つのインフラ改善シナリオ
 
 - ケース1.サーバのユーザ管理
 - ケース2.メンテナンス画面
@@ -91,12 +81,14 @@
 - サーバ数台~数十台
   - 手でやるのはつらい
   - インフラをコード化すると楽と聞いているけど、既存の環境をいじるのは怖い
-  - useraddのオプションなんだっけ？(たまにしか実行しない)
+  - useraddのオプションなんだっけ？
 - ユーザ管理の箇所だけコード化してみる
+   - chefでもcapistranoでもfabricでも、psshでも、シェルスクリプトでもなんでも良い
+   - 使い慣れたものがなければansibleで
 
 ---
 
-### ansibleを使った例
+## ansibleを使った例
 
 ```
 $ ansible-playbook -i hosts user.yml
@@ -118,19 +110,22 @@ server2
 ## シェルスクリプトとの優位性
 
 - 途中でグループを変えたくor消したくなった時
+ - usermod, userdel
 - オプション変えるだけで対応可能
+- サーバの追加やグループ化も簡単
+
+```
+- user: name="nakamura" group="changed" state="absent"
+```
 
 ---
 
 ## 更なる改善
 
-### コマンドを叩くこと自体がめんどう
+### コマンドを叩くのがめんどう
 
-- サーバログインはあまりしないので、コマンド忘れる
-  - コマンドを叩かないで実行したい
-- 解決案:設定変更して、pushしたら自動的にansibleが実行
+- 解決案:設定変更して、pushしたら自動的にansibleが実行(webhook)
   - CIツールを利用: Jenkins, Wercker, CircleCI
-- image
 
 ---
 
@@ -155,19 +150,33 @@ $ cat userlist.json
 }
 ```
 
-- ansibleを挟むことで、実装省力化
-- どこまでやるかは、懐事情と相談
+---
+
+## ユーザ管理スクリプト実装例
+
+```
+- name: create user (name required)
+  user: name={{ item.name }}
+        uid={{ item.uid | default() }} # 指定しない場合はansibleデフォルトが入る
+        password={{ item.password | default() }}
+        group={{ item.group | default("developer") }} # 指定しない場合はdeveloper groupに入る
+        groups={{ item.groups | default() }}
+        update_password=on_create # パスワードを設定するのは初期作成時のみ
+        state={{ item.state | default("present") }}
+  with_items: userlist
+
+- name: configure public key for develop
+  authorized_key: user={{ item.name }} key="{{ lookup('file', 'dev/' + item.name + '.pub') }}"
+  with_items: userlist
+```
 
 ---
 
 ### ケース2. メンテナンス画面
 
 - nginxの設定とメンテナンスページを書き換える
-  - 課題が2つ
-
-
-1. 設定変更+再読み込みするのがめんどう
-2. メンテナンスページの書換がめんどう
+ - (作業1)設定変更+再読み込み
+ - (作業2)メンテナンスページの書換
 
 ```
 $ // 以下をサーバ台数分実行
@@ -179,12 +188,19 @@ $ service nginx reload <- 設定反映
 
 ---
 
-## (課題1)設定変更+再読み込み
+## 改善案:Jenkinsから叩く
 
-1. メンテページ表示の設定変更がめんどう
+<img src="image/jenkins-maintenance.png" style="width: 700px; height: 400px;"/>
+
+- デモ
+- JenkinsはAPIが使えるので、chatbotからAPI叩けばchat経由でメンテ画面+文言切替も可能
+
+---
+
+## 内部の仕組み(その1)
+
+### メンテページ表示の設定変更
  - 解決案:nginxの設定で特定の場所に適当なファイルを置くと、メンテナンスページを表示
-2. 複数台のサーバにログインしてコマンドを実行がめんどう
- - 解決案:CIツールから叩く
 
 ```
 // /var/tmp/maintenanceファイルを作成するとメンテモードになる
@@ -193,22 +209,14 @@ if (-f /var/tmp/maintenance) {
 }
 ```
 
----
-
-## (課題2)ページ書換がめんどう
-
-- 直接サーバ内のhtmlを書換
-- 外部からファイルコピー
-- gitからばらまく
-  - どの方法もページ書換が必要
-
-- (解決案)可変箇所を変数化して外部から変更
+- touch /var/tmp/maintenanceを全サーバで実行するスクリプトを書けば良い
 
 ---
 
-## 画面イメージ
+## 内部の仕組み(その2)
 
-<img src="image/jenkins-maintenance.jpg" style="width: 700px; height: 400px;"/>
+### メンテページの日付文言変更
+ - 解決案:日付の部分(可変箇所)を変数化
 
 ```
 // Jenkinsで以下のシェルを実行
@@ -217,60 +225,98 @@ if [ ${confirm} == false ]; then
 fi
 ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --tags="on" maintenance.yml
 
-// maintenance.htmlの例
+// maintenance.htmlの例 Jenkinsで入れたmessageの内容を埋め込むテンプレートを作れば良い
 <p>本日のメンテナンス時間は{{ message }}を予定しています</p>
 ```
 
-### URLが外せるならデモ
-
 ---
 
-## 今回の改善方法の仕組み
-
-1. Jenkins
-2. chatbot -> Jenkins 
-3. command -> Jenkins
-
-### image
-
----
-
-### 前半戦まとめ
+## 前半戦まとめ
 
 - 小さな改善は時間をかけずスピーディーに
-- 小さな改善で効果を示したり、成功体験を作った後に、大きな改善につなげていく
-
-- (もちろん、最初から全て完璧に自動化できれば問題ない)
+  - ansible+Jenkins等のCIツールがオススメ
+  - JenkinsでUIやAPIを作って、それをchatbotやcommandを組み合わせて叩くと楽
+- 小さな改善でツールに親しむ
+  - ansibleは構成管理にもデプロイにも使えて便利
 
 ---
 
 # 後半戦
-## 改善テクニック・例
+## 社内ツールを一部紹介
+
+<!-- .slide: data-background="#66CCFF" -->
 
 ---
 
-ansible（インフラをコード化すると便利なこと）の便利な使い方
-処理内容をpartsに分割できる->コピペをしないというプログラミングの考え方
-テストもできる
-jinja2
+## ec2signal
+### デモ
+
+- サーバの起動停止を開発者でも気軽に
+- 開発者に必要な情報だけを見せる+高速絞込
+
+---
+
+## iOSアプリ配布ツール
+### デモ
+
+- 社内配布用(Developer Enterprise)ページ自動生成ツール
+- Jenkinsかコマンドから実行可能
+ - 実行すると、静的HTMLを生成する別ツールが動く
+
+---
+
+## db schemaページの自動作成
+### デモ
+### DBFluteの[SchemaHTML](http://dbflute.seasar.org/ja/manual/function/generator/task/doc/schemahtml.html)を使ってgitからとってくるだけ
+
+---
+
+## ログの可視化
+
+- fluentd+elasticsearch+kibana
+ - 鉄板構成
+ - fluentd x ansibleの相性良し
+
+- 評判が良い可視化項目
+ - mysqlのスロークエリ
+ - アプリログ（課金情報等）
+ - アプリケーションエラー
+ - メール送信情報
+ - sensuのイベント -> 次のプレゼンで紹介
+
+---
+
+# おわり
+
+<!-- .slide: data-background="#DDDDDD" -->
+
+---
+
+## 資料について
+- プレゼン資料はreveal.js+markdown+github pagesで作成しています。
+- [ここ](https://github.com/n10o/ansible-technique)でソースを公開しているので・・・
+
+---
+
+### ansibleの便利な使い方
+
+- アプリサーバとアドミンサーバ
+ - サーバによって必要なミドルウェアの設定は違う
+ - サーバ毎によって設定ファイルを変える必要がある
+
+- 処理内容をpartsに分割できる->コピペをしないというプログラミングの考え方
+  - jinja2(template engine by python)
 
 ```
 {parts/fluentd-redshift}
 ```
 
-アプリサーバとアドミンサーバ
-サーバによって必要なミドルウェアの設定は違う
-
-サーバ毎によって設定ファイルを変える必要がある
-
-fluentd
-
 ---
 
-## deployもansibleで(会社によってデプロイ方法は千差万別)
+## deployもansibleで
 
-ELBの付け外し等簡単に実施可能
-(便利な機能が沢山ある
+- ELBの付け外し等簡単に実施可能
+  -便利な機能が沢山
 
 ```
 - name: Instance De-register
@@ -287,58 +333,6 @@ ELBの付け外し等簡単に実施可能
 
 ## インスタンス作成
 
-GUIで聞かれる内容をそのままコード化すれば良い
+- GUIで聞かれる内容をそのままコード化すれば良い
 
-コード化が気に入れば、Terraformやopsworks、cloudformationを検討
-
----
-
-# ツール紹介
-
----
-
-## ec2signal
-
-- サーバの起動停止を開発者でも気軽に
-- 開発者に必要な情報だけを見せる+高速絞込
-
-### デモ
-
----
-
-## iOSアプリ配布ツール
-
-- 社内配布用(Developer Enterprise)ページ自動生成ツール
-
-Jenkinsかコマンドから実行可能
-実行すると、静的HTMLを生成する別ツールが動く
-コマンドにはコードネームを自動生成する機能付き
-
-### デモ
-
----
-
-## db schemeの自動更新
-
----
-
-## ログの可視化
-### fluentd+elasticsearch+kibana
-mysqlのスロークエリ
-アプリケーションエラー
-アクセスログ
-sensuのイベントログ
-
----
-
-# おわり
-
-<!-- .slide: data-background="#DDDDDD" -->
-
----
-
-## 資料について
-- プレゼン資料はreveal.js+markdown+github pagesで作成しています。
-- [ここ](https://github.com/n10o/ansible-technique)でソースを公開しているので・・・
-
----
+- コード化が気に入れば、terraform等で全体構成から設計
