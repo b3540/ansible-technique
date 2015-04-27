@@ -1,6 +1,6 @@
-# 小さく始めるAnsible
+# オランダ的インフラコントロールテクニック総集編(Ansible)
 
-[プレゼンテーションページ](http://n10o.com/minimum-ansible)
+[プレゼンテーションページ](http://n10o.com/ansible-technique)
 
 reveal.jsを使って内部をcontent.mdファイルに分離し、github pagesでホストしています。
 
