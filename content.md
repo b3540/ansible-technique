@@ -15,19 +15,18 @@
 ```
 生まれは函館で帯広に引っ越し、それから小樽に行き、
 稚内でロシア人とともに厳しい冬を越し、函館に戻る。
-就職を期に埼玉に引っ越して、沼津の山奥に移り、
+就職を期に津軽海峡を渡り、埼玉に引っ越して、沼津の山奥に移り、
 大自然を満喫した後に、神奈川に移住。
-そして、現在は東京で都会人のフリをしています。
+そして、現在は東京で都会人のフリをしている、俗に言う田舎系エンジニア。
 ```
 
 ---
 
 ## オランダ的とは
 
-- サッカー
 - ロッベンのクロスをスナイデルがダイレクトボレーで合わせるような、
-サイドから崩す手法
-- 参考:アルゼンチン的 -> 中央から崩す手法
+サイドから崩す攻撃スタイル
+- 対義語:アルゼンチン的 -> メッシとディマリアのワンツー -> 中央から崩す手法
 
 <img src="image/soccer.jpg" style="width: 700px; height: 400px;"/>
 
@@ -35,6 +34,7 @@
 
 ## インフラ改善もサイド攻撃
 
+- 本日はインフラ自動化、コード化がテーマ
 - 中央突破は難しくても、サイドからの崩しで簡単に
   - 中央突破の例: インフラを全部コード化
   - サイド攻撃の例: 本当に困っている箇所だけコード化
@@ -83,8 +83,8 @@
   - インフラをコード化すると楽と聞いているけど、既存の環境をいじるのは怖い
   - useraddのオプションなんだっけ？
 - ユーザ管理の箇所だけコード化してみる
-   - chefでもcapistranoでもfabricでも、psshでも、シェルスクリプトでもなんでも良い
-   - 使い慣れたものがなければansibleで
+  - chefでもcapistranoでもfabricでも、psshでも、シェルスクリプトでもなんでも良い
+  - 使い慣れたものがなければansibleで
 
 ---
 
@@ -122,7 +122,7 @@ server2
 
 ## 更なる改善
 
-### コマンドを叩くのがめんどう
+### 課題:コマンドを叩くのがめんどう
 
 - 解決案:設定変更して、pushしたら自動的にansibleが実行(webhook)
   - CIツールを利用: Jenkins, Wercker, CircleCI
@@ -135,17 +135,19 @@ server2
 
 目指す姿:hubot useradd nakamuraで全サーバにユーザ追加
 
+<img src="image/chat-arch.png" style="width: 700px; height: 100px;"/>
 
-1. 設定外出し(変数部分をjson化)
-1. 設定ファイルをコントロールするコマンド作成(デモ)
+1. タスク内の変数外出し(json化)
+1. 変数を追加・削除するコマンド作成(デモ)
 1. chatbot or Jenkinsから実行
+ - Jenkinsをコマンド実行ツール+APIとして活用(デモ)
 
 ```
-$ cat userlist.json
+$ cat userlist.json // <- 変数箇所をjson化したファイル(jsonにすることで修正を容易に)
 {
   "userlist":[
   { "name":"nakamura","uid":"123","group":"developer" },
-  { "name":"suzuki","uid":"123","group":"admin",  "groups":"wheel" }
+  { "name":"suzuki","uid":"124","group":"admin",  "groups":"wheel" }
   ]
 }
 ```
@@ -174,9 +176,9 @@ $ cat userlist.json
 
 ### ケース2. メンテナンス画面
 
-- nginxの設定とメンテナンスページを書き換える
- - (作業1)設定変更+再読み込み
- - (作業2)メンテナンスページの書換
+- 作業内容
+ - メンテナンスページの書換
+ - 設定変更+再読み込み
 
 ```
 $ // 以下をサーバ台数分実行
@@ -224,9 +226,18 @@ if [ ${confirm} == false ]; then
   exit 1
 fi
 ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --tags="on" maintenance.yml
+```
 
-// maintenance.htmlの例 Jenkinsで入れたmessageの内容を埋め込むテンプレートを作れば良い
-<p>本日のメンテナンス時間は{{ message }}を予定しています</p>
+- message変数にJenkinsで入力した日付値が代入
+ - ansibleのJinja2テンプレート言語を利用
+
+```
+// maintenance.htmlの例 Jenkinsで入れたmessageの内容を埋め込むjinja2テンプレートを作成
+<html>
+  (略)
+  <p>本日のメンテナンス時間は{{ message }}を予定しています</p>
+  (略)
+</html>
 ```
 
 ---
@@ -249,10 +260,13 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
 ---
 
 ## ec2signal
-### デモ
+### デモ(v2開発中)
 
 - サーバの起動停止を開発者でも気軽に
 - 開発者に必要な情報だけを見せる+高速絞込
+- API提供
+ - 各サーバのホスト一覧を表示
+ - サーバ種別毎の一括コントロール
 
 ---
 
@@ -260,14 +274,15 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
 ### デモ
 
 - 社内配布用(Developer Enterprise)ページ自動生成ツール
-- Jenkinsかコマンドから実行可能
- - 実行すると、静的HTMLを生成する別ツールが動く
+- コマンド(CI連携用)かJenkinsから実行可能
+ - ipa(iosアプリのアーカイブ)を配布サーバにアップロード
+ - ipaインストールのための静的HTML生成
 
 ---
 
-## db schemaページの自動作成
+## db schemaページ自動作成
 ### デモ
-### DBFluteの[SchemaHTML](http://dbflute.seasar.org/ja/manual/function/generator/task/doc/schemahtml.html)を使ってgitからとってくるだけ
+- DBFluteの[SchemaHTML](http://dbflute.seasar.org/ja/manual/function/generator/task/doc/schemahtml.html)を利用
 
 ---
 
@@ -279,10 +294,8 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
 
 - 評判が良い可視化項目
  - mysqlのスロークエリ
- - アプリログ（課金情報等）
  - アプリケーションエラー
  - メール送信情報
- - sensuのイベント -> 次のプレゼンで紹介
 
 ---
 
@@ -305,7 +318,7 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
  - サーバ毎によって設定ファイルを変える必要がある
 
 - 処理内容をpartsに分割できる->コピペをしないというプログラミングの考え方
-  - jinja2(template engine by python)
+ - jinja2(template engine by python)
 
 ```
 {parts/fluentd-redshift}
@@ -334,5 +347,4 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
 ## インスタンス作成
 
 - GUIで聞かれる内容をそのままコード化すれば良い
-
-- コード化が気に入れば、terraform等で全体構成から設計
+- コード化が気に入れば、terraform、opsworks、cloudformationの世界へ
