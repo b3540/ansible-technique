@@ -313,15 +313,17 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
 
 ### ansibleの便利な使い方
 
-- アプリサーバとアドミンサーバ
- - サーバによって必要なミドルウェアの設定は違う
- - サーバ毎によって設定ファイルを変える必要がある
+- サーバの種類毎に必要なミドルウェアの設定は違う
+ - 設定ファイルに差異
 
-- 処理内容をpartsに分割できる->コピペをしないというプログラミングの考え方
- - jinja2(template engine by python)
+- Jinja2を使うと処理内容をpartsに分割でき
 
 ```
-{parts/fluentd-redshift}
+$ cat app-td-agent.conf.j2
+{% include "parts/nginx-access.j2" %}
+{% include "parts/app-error.j2" %}
+{% include "parts/redshift-source-candidate.j2" %}
+{% include "parts/redshift-match.j2" %}
 ```
 
 ---
