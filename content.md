@@ -316,7 +316,7 @@ ansible-playbook -i inventories/dev/hosts --extra-vars "message='${message}'" --
 - サーバの種類毎に必要なミドルウェアの設定は違う
  - 設定ファイルに差異
 
-- Jinja2を使うと処理内容をpartsに分割でき
+- Jinja2で処理内容をpartsに分割可能
 
 ```
 $ cat app-td-agent.conf.j2
